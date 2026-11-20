@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tum Aankhon Se Batana · Cinematic Parallax</title>
+<style>
+  :root { --ease: cubic-bezier(.22,.61,.36,1); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #1a0f1e; color: #fdeef0; }
+  body { font-family: "Georgia", "Times New Roman", serif; -webkit-font-smoothing: antialiased; }
+
+  /* Continuous long-page scroll — scenes flow into each other (no snap) */
+  .scroller {
+    height: 100svh; overflow-y: scroll;
+    scroll-behavior: smooth;
+  }
+  .scroller::-webkit-scrollbar { width: 0; height: 0; }
+
+  .panel {
+    position: relative; height: 100svh;
+    overflow: hidden; display: grid; place-items: end start;
+  }
+  .panel[data-text="bottom-left"]  { place-items: end start; }
+  .panel[data-text="bottom-right"] { place-items: end end; }
+  .panel[data-text="center-left"]  { place-items: center start; }
+  .panel[data-text="top-left"]     { place-items: start start; }
+  .panel[data-text="top-right"]    { place-items: start end; }
+  .panel[data-text="center"]       { place-items: center; }
+
+  /* Layer stack — each .layer is one transparent PNG (or the opaque bg) */
+  .layer {
+    position: absolute; inset: -12%;
+    background-size: cover; background-position: center; background-repeat: no-repeat;
+    will-change: transform; pointer-events: none;
+  }
+  /* cutouts composed on the same 16:9 canvas — laid in-frame at contain so they align */
+  .layer.el {
+    inset: 0;
+    background-size: contain;
+    background-position: center bottom;
+  }
+
+  /* ── Scene 1 per-figure placement ──────────────────────────────
+     The bg tree sits RIGHT and the open downhill sky is LEFT, so we
+     place HER over the open left and HIM framed by the tree on the
+     right. Cutouts were composed full-frame, so we re-anchor with a
+     horizontal background-position + a width box (no transform — GSAP
+     owns transform). */
+  .layer.el.fig-left {
+    inset: auto; left: 14%; right: auto; bottom: 0;
+    width: 54%; height: 124%;
+    background-position: center bottom;
+  }
+  .layer.el.fig-right {
+    inset: auto; right: 4%; left: auto; bottom: 0;
+    width: 52%; height: 120%;
+    background-position: center bottom;
+  }
+  /* a single figure sitting/standing low in the CENTER-LEFT (him waiting) */
+  .layer.el.fig-cl {
+    inset: auto; left: 2%; right: auto; bottom: 0;
+    width: 60%; height: 104%;
+    background-position: center bottom;
+  }
+  /* a face CLOSE-UP filling the CENTER-RIGHT (Scene 2 — her blush) */
+  .layer.el.fig-cr {
+    inset: auto; right: 7%; left: auto; bottom: -4%;
+    width: 64%; height: 112%;
+    background-position: center bottom;
+  }
+  /* a couple (combined cutout) standing centered (Scene 5 — joined hands).
+     centered via left/right (NOT transform — GSAP owns transform for idle drift) */
+  .layer.el.fig-center {
+    inset: auto; left: 19%; right: 19%; bottom: 0;
+    height: 116%;
+    background-position: center bottom;
+  }
+  /* a centered close-up (Scene 7 — mehndi hands) sitting mid-frame */
+  .layer.el.hands {
+    inset: 12% 8% 12% 8%;
+    background-size: contain; background-position: center;
+  }
+  /* a seated couple centered low (Scene 8 — sitting under the tree) */
+  .layer.el.fig-seated {
+    inset: auto; left: 16%; right: 16%; bottom: 0;
+    height: 86%;
+    background-position: center bottom;
+  }
+  /* a cafe two-shot close-up filling most of the frame (Scene 7 — across the table) */
+  .layer.el.cafe {
+    inset: 4% 6% 0 6%;
+    background-size: contain; background-position: center bottom;
+  }
+  /* an overhanging branch framing the TOP / upper area (composed full-frame already) */
+  .layer.el.branch { inset: 0; background-size: cover; background-position: center top; }
+  /* a billowing scarf / dupatta trailing across the center-right (Scene 4) */
+  .layer.el.scarf {
+    inset: auto; left: 22%; right: -8%; top: 30%; bottom: auto;
+    height: 48%; background-position: center; background-size: contain;
+  }
+  /* fairy/string lights spanning the full TOP, feathered along the bottom edge */
+  .layer.el.toplights {
+    inset: 0; background-size: cover; background-position: center top;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 38%, transparent 62%);
+            mask-image: linear-gradient(180deg, #000 0%, #000 38%, transparent 62%);
+  }
+  /* foreground grass / glow bands span full width along the bottom */
+  .layer.el.fill { inset: -6%; background-size: cover; background-position: center bottom; }
+  /* the glow is a soft accent BEHIND the people — never a veil over them */
+  .layer.el.glow { opacity: .55; }
+
+  /* Feather the cutout box edges so the layer's rectangle never shows a hard
+     seam — left/right/top dissolve into the layers behind; bottom stays solid
+     so figures keep their footing on the ground. */
+  .layer.el.fig-left, .layer.el.fig-right, .layer.el.fig-cl, .layer.el.fig-cr, .layer.el.fig-center, .layer.el.fig-seated, .layer.el.cafe {
+    -webkit-mask-image:
+      linear-gradient(90deg,  transparent 0%, #000 14%, #000 86%, transparent 100%),
+      linear-gradient(180deg, transparent 0%, #000 12%, #000 100%);
+    -webkit-mask-composite: source-in;
+            mask-image:
+      linear-gradient(90deg,  transparent 0%, #000 14%, #000 86%, transparent 100%),
+      linear-gradient(180deg, transparent 0%, #000 12%, #000 100%);
+            mask-composite: intersect;
+  }
+  /* branch frame: feather only the inner (lower / right) edge so it melts into sky */
+  .layer.el.branch {
+    -webkit-mask-image: radial-gradient(140% 120% at 15% 5%, #000 55%, transparent 85%);
+            mask-image: radial-gradient(140% 120% at 15% 5%, #000 55%, transparent 85%);
+  }
+  /* a floating centered close-up: soft all-around oval feather (Scene 7 hands) */
+  .layer.el.hands {
+    -webkit-mask-image: radial-gradient(ellipse 62% 64% at 50% 50%, #000 62%, transparent 92%);
+            mask-image: radial-gradient(ellipse 62% 64% at 50% 50%, #000 62%, transparent 92%);
+  }
+  /* horizontal bands: only fade the left & right ends (top/bottom already soft) */
+  .layer.el.fill {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+            mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  }
+
+  /* Fallback tint (warm dusk) so it looks intentional before images load */
+  .panel { background:
+      radial-gradient(120% 120% at 60% 30%, #6a2f3a 0%, #2a1018 55%, #14080e 100%); }
+  /* Scene 2 — cool blue-purple twilight */
+  .panel[data-tint="cool"] { background:
+      radial-gradient(120% 120% at 35% 25%, #2e2b5a 0%, #161033 55%, #0a0820 100%); }
+
+  /* Cinematic grade: vignette + soft scrims so text reads over any layer */
+  .panel::after {
+    content: ""; position: absolute; inset: 0; z-index: 50; pointer-events: none;
+    background:
+      radial-gradient(130% 100% at 50% 45%, transparent 55%, rgba(20,8,14,.5) 100%),
+      linear-gradient(180deg, rgba(20,8,14,.6) 0%, transparent 34%),
+      linear-gradient(0deg, rgba(20,8,14,.5) 0%, transparent 30%),
+      linear-gradient(90deg, rgba(20,8,14,.55) 0%, transparent 42%);
+  }
+
+  .panel__inner {
+    position: relative; z-index: 60; text-align: left;
+    margin: 9vh 8vw; max-width: min(20ch, 82vw);
+    filter: drop-shadow(0 6px 30px rgba(0,0,0,.7));
+  }
+  /* right-anchored corners read better right-aligned; margin-left:auto pulls the
+     capped box to the right edge so its own right margin holds it off the frame */
+  .panel[data-text="top-right"]    .panel__inner,
+  .panel[data-text="bottom-right"] .panel__inner { text-align: right; }
+  .eyebrow {
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    font-size: clamp(.7rem,1vw,.85rem); letter-spacing: .36em;
+    text-transform: uppercase; color: rgba(253,238,240,.72); margin-bottom: 1.1rem;
+  }
+  h1 {
+    font-size: clamp(3rem,8vw,7rem); font-weight: 700; line-height: .96;
+    letter-spacing: -.015em; text-shadow: 0 4px 40px rgba(0,0,0,.7);
+  }
+  h1 .sub {
+    display: block; font-size: .3em; letter-spacing: .18em;
+    color: rgba(253,238,240,.88); margin-top: .5em; font-weight: 400;
+  }
+  p.lede {
+    margin-top: 1.3rem; font-style: italic; font-size: clamp(1.05rem,1.8vw,1.6rem);
+    color: rgba(253,238,240,.9); line-height: 1.45; max-width: 24ch;
+    text-shadow: 0 2px 20px rgba(0,0,0,.7);
+  }
+
+  .cue {
+    position: absolute; bottom: 4vh; right: 4vw;
+    z-index: 60; font-family: -apple-system, sans-serif; font-size: .65rem;
+    letter-spacing: .3em; text-transform: uppercase; color: rgba(253,238,240,.6);
+    display: grid; justify-items: center; gap: .6rem;
+  }
+  .cue::after {
+    content: ""; width: 1px; height: 32px;
+    background: linear-gradient(rgba(253,238,240,.7), transparent);
+    animation: cueDrop 1.8s var(--ease) infinite;
+  }
+  @keyframes cueDrop { 0%{transform:scaleY(0);transform-origin:top} 50%{transform:scaleY(1);transform-origin:top} 51%{transform-origin:bottom} 100%{transform:scaleY(0);transform-origin:bottom} }
+
+  @media (prefers-reduced-motion: reduce) { .cue::after { animation: none; } .scroller { scroll-behavior: auto; } }
+
+  /* ── Music: small hint shown only if the browser blocks autoplay ── */
+  .sound-hint {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    z-index: 50; padding: 10px 18px; border-radius: 999px;
+    font: 500 13px/1 system-ui, sans-serif; letter-spacing: .08em;
+    color: #fdeef0; background: rgba(20,10,14,.55);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .6s;
+  }
+  .sound-hint.show { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body>
+  <audio id="bgm" src="Aankhon-Se-Batana-Dikshant-128-K.mp3" preload="auto" loop autoplay></audio>
+  <div class="sound-hint" id="soundHint">♪ tap to play sound</div>
+  <main class="scroller" id="scroller">
+
+    <!-- ============ SCENE 1 — The Glance ============ -->
+    <!-- bg tree is RIGHT, open sky LEFT. her→left (open sky), him→right (by tree).
+         title sits center-left in the open space. data-depth: bigger = floats more. -->
+    <section class="panel" data-text="top-left">
+      <div class="layer"                  data-depth="0"  style="background-image:url('images/aankhon/scene1/01-hillside.png')"></div>
+      <div class="layer el fill glow"     data-depth="8"  style="background-image:url('images/aankhon/scene1/05-glow.png')"></div>
+      <div class="layer el fig-left"      data-depth="16" style="background-image:url('images/aankhon/scene1/02-him.png')"></div>
+      <div class="layer el fig-right"     data-depth="20" style="background-image:url('images/aankhon/scene1/03-her.png')"></div>
+      <div class="layer el fill"          data-depth="30" style="background-image:url('images/aankhon/scene1/04-grass.png')"></div>
+      <div class="panel__inner">
+        <p class="eyebrow">Tum Aankhon Se Batana</p>
+        <h1>The Glance<span class="sub">a love told without words</span></h1>
+      </div>
+      <div class="cue">Scroll</div>
+    </section>
+
+    <!-- ============ SCENE 2 — The Blush ============ -->
+    <!-- warm. her face close-up center-right; petals + wisps + glow for motion.
+         open space LEFT → title top-left. -->
+    <section class="panel" data-text="top-left">
+      <div class="layer"               data-depth="0"  style="background-image:url('images/aankhon/scene2/01-warmblur.png')"></div>
+      <div class="layer el fill glow"  data-depth="6"  style="background-image:url('images/aankhon/scene2/05-glow.png')"></div>
+      <div class="layer el fig-cr"     data-depth="16" style="background-image:url('images/aankhon/scene2/02-her-closeup.png')"></div>
+      <div class="layer el fill"       data-depth="28" style="background-image:url('images/aankhon/scene2/04-hairwisps.png')"></div>
+      <div class="layer el fill"       data-depth="34" style="background-image:url('images/aankhon/scene2/03-petals.png')"></div>
+      <div class="panel__inner">
+        <p class="eyebrow">Tum halki si sharmana</p>
+        <h1>The Blush<span class="sub">and I'm yours</span></h1>
+      </div>
+    </section>
+
+    <!-- ============ SCENE 3 — The Wait ============ -->
+    <!-- (kept from earlier; will sit at position 3 in the final 8-scene cut)
+         cool twilight. him sits center-left under the tree; branch frames top-left.
+         open sky is RIGHT → title top-right. fireflies faint behind him. -->
+    <section class="panel" data-tint="cool" data-text="top-right">
+      <div class="layer"               data-depth="0"  style="background-image:url('images/aankhon/scene3/01-twilight.png')"></div>
+      <div class="layer el fill glow"  data-depth="7"  style="background-image:url('images/aankhon/scene3/04-fireflies.png')"></div>
+      <div class="layer el fig-cl"     data-depth="17" style="background-image:url('images/aankhon/scene3/02-him-wait.png')"></div>
+      <div class="layer el branch"     data-depth="26" style="background-image:url('images/aankhon/scene3/03-tree-branch.png')"></div>
+      <div class="panel__inner">
+        <p class="eyebrow">Hum raah taake baithe</p>
+        <h1>The Wait<span class="sub">hoping for a sign</span></h1>
+      </div>
+    </section>
+
+    <!-- ============ SCENE 4 — A Sign ============ -->
+    <!-- warm meadow. her standing center-left, glancing back; dupatta billows right.
+         grass foreground + petals for motion. open RIGHT → title bottom-right. -->
+    <section class="panel" data-text="bottom-right">
+      <div class="layer"               data-depth="0"  style="background-image:url('images/aankhon/scene4/01-meadow.png')"></div>
+      <div class="layer el scarf"      data-depth="30" style="background-image:url('images/aankhon/scene4/03-dupatta.png')"></div>
+      <div class="layer el fig-cl"     data-depth="16" style="background-image:url('images/aankhon/scene4/02-her-stand.png')"></div>
+      <div class="layer el fill"       data-depth="24" style="background-image:url('images/aankhon/scene4/04-grass-fg.png')"></div>
+      <div class="layer el fill"       data-depth="36" style="background-image:url('images/aankhon/scene4/05-petals.png')"></div>
+      <div class="panel__inner">
+        <p class="eyebrow">Koi ijaazat do</p>
+        <h1>A Sign<span class="sub">she answers</span></h1>
+      </div>
+    </section>
+
+    <!-- ============ SCENE 5 — Your Hand ============ -->
+    <!-- warm golden field. couple centered, hands joining; flowers fg + petals.
+         open sky / bottom-left → title bottom-left. -->
+    <section class="panel" data-text="bottom-left">
+      <div class="layer"               data-depth="0"  style="background-image:url('images/aankhon/scene5/01-goldenfield.png')"></div>
+      <div class="layer el fill glow"  data-depth="6"  style="background-image:url('images/aankhon/scene5/05-glow.png')"></div>
+      <div class="layer el fig-center" data-depth="16" style="background-image:url('images/aankhon/scene5/02-couple-hands.png')"></div>
+      <div class="layer el fill"       data-depth="26" style="background-image:url('images/aankhon/scene5/03-flowers-fg.png')"></div>
+      <div class="layer el fill"       data-depth="36" style="background-image:url('images/aankhon/scene5/04-petals.png')"></div>
+      <div class="panel__inner">
+        <p class="eyebrow">Tum haath thaam lena</p>
+        <h1>Your Hand<span class="sub">and I'm complete</span></h1>
+      </div>
+    </section>
+
+    <!-- ============ SCENE 6 — Together ============ -->
+    <!-- warm dusk glow. couple close & content, centered; string-lights frame top,
+         grass fg + sparkles. open bottom-right → title bottom-right. -->
+    <section class="panel" data-text="bottom-right">
+      <div class="layer"               data-depth="0"  style="background-image:url('images/aankhon/scene6/01-duskglow.png')"></div>
+      <div class="layer el fill glow"  data-depth="6"  style="background-image:url('images/aankhon/scene6/05-sparkle.png')"></div>
+      <div class="layer el fig-center" data-depth="16" style="background-image:url('images/aankhon/scene6/02-couple-close.png')"></div>
+      <div class="layer el toplights"  data-depth="24" style="background-image:url('images/aankhon/scene6/03-stringlights.png')"></div>
+      <div class="layer el fill"       data-depth="32" style="background-image:url('images/aankhon/scene6/04-grass-fg.png')"></div>
+      <div class="panel__inner">
+        <p class="eyebrow">Hum tere ho jaayenge</p>
+        <h1>As One<span class="sub">and I'll be yours</span></h1>
+      </div>
+    </section>
+
+    <!-- ============ SCENE 7 — The Café ============ -->
+    <!-- warm cafe. the two across a table, cups in hand, eyes meeting; hanging
+         lights frame top, table edge fg, bokeh + steam drift. title bottom-left. -->
+    <section class="panel" data-text="bottom-left">
+      <div class="layer"               data-depth="0"  style="background-image:url('images/aankhon/scene7/01-cafe.png')"></div>
+      <div class="layer el fill glow"  data-depth="6"  style="background-image:url('images/aankhon/scene7/05-bokeh.png')"></div>
+      <div class="layer el cafe"       data-depth="15" style="background-image:url('images/aankhon/scene7/02-cafe-couple.png')"></div>
+      <div class="layer el toplights"  data-depth="24" style="background-image:url('images/aankhon/scene7/03-hanglights.png')"></div>
+      <div class="layer el fill"       data-depth="30" style="background-image:url('images/aankhon/scene7/04-table-fg.png')"></div>
+      <div class="panel__inner">
+        <p class="eyebrow">Bin kuch kahe</p>
+        <h1>The Café<span class="sub">eyes do the talking</span></h1>
+      </div>
+    </section>
+
+    <!-- ============ SCENE 8 — Silence (finale) ============ -->
+    <!-- warm twilight night-field (bg already has the lit tree on the right).
+         couple sits center under the tree; grass fg + fireflies. moon/open sky
+         LEFT → title top-left. bookends Scene 1's tree shot. -->
+    <section class="panel" data-text="top-left">
+      <div class="layer"               data-depth="0"  style="background-image:url('images/aankhon/scene8/01-nightfield.png')"></div>
+      <div class="layer el fill glow"  data-depth="6"  style="background-image:url('images/aankhon/scene8/05-glow.png')"></div>
+      <div class="layer el fig-seated" data-depth="15" style="background-image:url('images/aankhon/scene8/02-couple-sit.png')"></div>
+      <div class="layer el fill"       data-depth="28" style="background-image:url('images/aankhon/scene8/04-grass-fg.png')"></div>
+      <div class="panel__inner">
+        <p class="eyebrow">Hum khaamoshi padh lenge</p>
+        <h1>Silence<span class="sub">I'll read it all</span></h1>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script>
+  (() => {
+    "use strict";
+
+    // ── PICK YOUR FEEL ──────────────────────────────────────────────
+    // "calm" | "smooth" | "lively" | "intense"
+    const SPEED = "lively";
+    // ────────────────────────────────────────────────────────────────
+
+    const PRESETS = {
+      calm:    { parallax: 0.8, idle: 1.0, dur: 6 },
+      smooth:  { parallax: 1.2, idle: 1.8, dur: 5 },
+      lively:  { parallax: 1.8, idle: 3.0, dur: 4 },
+      intense: { parallax: 2.6, idle: 4.5, dur: 3.2 },
+    };
+    const cfg = PRESETS[SPEED] || PRESETS.smooth;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const panels = gsap.utils.toArray(".panel");
+    const scroller = document.getElementById("scroller");
+
+    gsap.registerPlugin(ScrollTrigger);
+    ScrollTrigger.defaults({ scroller });
+
+    panels.forEach((panel) => {
+      const layers = gsap.utils.toArray(panel.querySelectorAll(".layer"));
+      const inner = panel.querySelector(".panel__inner");
+
+      layers.forEach((layer, li) => {
+        const depth = parseFloat(layer.dataset.depth) || 0;
+        const isFigure = /\b(fig-|hands|cafe)/.test(layer.className);
+
+        // Scroll-linked parallax: deeper layers travel more
+        gsap.fromTo(layer,
+          { yPercent: -depth * cfg.parallax * 0.5 },
+          { yPercent: depth * cfg.parallax * 0.5, ease: "none",
+            scrollTrigger: { trigger: panel, start: "top bottom", end: "bottom top", scrub: true } }
+        );
+
+        // Idle motion: each layer drifts forever by its depth — living 3D feel.
+        // Figures (people) drift + breathe but DON'T rotate, so they never "swim".
+        if (!reduceMotion && depth > 0) {
+          const amp = depth * cfg.idle;
+          const dir = li % 2 ? -1 : 1;
+          gsap.to(layer, {
+            x: amp * dir,
+            y: -amp * 0.5,
+            scale: 1 + depth * 0.005,
+            rotation: isFigure ? 0 : depth * 0.04 * dir,
+            duration: cfg.dur + li * 0.5,
+            ease: "sine.inOut",
+            repeat: -1, yoyo: true,
+          });
+        }
+      });
+
+      // Content reveal on enter
+      gsap.from(inner, {
+        autoAlpha: 0, y: 50, duration: 1.1, ease: "power3.out",
+        scrollTrigger: { trigger: panel, start: "top 65%" },
+      });
+    });
+  })();
+  </script>
+
+  <script>
+  // ── MUSIC: plays as soon as the page opens ───────────────────────
+  // Browsers often block sound until the visitor interacts once, so if
+  // autoplay is refused we start the song on the very first tap/click/key.
+  (() => {
+    const bgm  = document.getElementById("bgm");
+    const hint = document.getElementById("soundHint");
+    bgm.volume = 0.9;
+
+    const events = ["pointerdown", "touchend", "keydown", "click"];
+    const unlock = () => start();
+    const arm    = () => events.forEach(e => window.addEventListener(e, unlock, { once: true, passive: true }));
+    const disarm = () => events.forEach(e => window.removeEventListener(e, unlock));
+
+    function start() {
+      const p = bgm.play();
+      if (p && p.then) {
+        p.then(() => { hint.classList.remove("show"); disarm(); })
+         .catch(() => { hint.classList.add("show"); arm(); });
+      }
+    }
+
+    start();                                   // try immediately
+    window.addEventListener("load", start);    // and again once loaded
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && bgm.paused && !hint.classList.contains("show")) start();
+    });
+    hint.addEventListener("click", start);
+  })();
+  </script>
+</body>
+</html>
